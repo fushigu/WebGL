@@ -20,23 +20,38 @@ var camera;
 var points;
 var selected = null;
 
+function eval_bezier(p0, p1, p2, t) {
+    var x01 = vec2.scaleAndAdd_ip(vec2.scale([], p0, 1-t), p1, t);
+    var x12 = vec2.scaleAndAdd_ip(vec2.scale([], p1, 1-t), p2, t);
+    return vec2.scaleAndAdd_ip(vec2.scale([], x01, 1-t), x12, t);
+}
 
-function eval_catmull_rom(p0, p1, p2, p3, t0, t1, t2, t3, t) {
-    if (!(t1 <= t && t <= t2)) {
-        alert("invalid t value")
-        return;
+function eval_circular(p0, p1, p2, t) {
+    var e = vec2.scale(vec2.add([], p0, p1), 0.5);
+    var f = vec2.scale(vec2.add([], p1, p2), 0.5)
+    var cx = (e[1] - f[1] - e[0]*tana + f[1] * tanb) 
+}
+
+
+function eval_c2_interpolating_splines(p0, p1, p2, p3, t) {
+    var f1, f2;
+    if (document.getElementById("input_function_type").value === "bezier") {
+        var t1 = t / Math.PI + 0.5;
+        var t2 = t / Math.PI;
+        f1 = eval_bezier(p0, vec2.scale([], vec2.sub([], vec2.sub([], p1, vec2.scale([], p0, (1-t1)**2)), vec2.scale([], p2, t1**2)) , 1.0 / (2 * (1 - t1) * t1)), p2, t1);
+        f2 = eval_bezier(p1, vec2.scale([], vec2.sub([], vec2.sub([], p2, vec2.scale([], p1, (1-t2)**2)), vec2.scale([], p3, t2**2)) , 1.0 / (2 * (1 - t2) * t2)), p3, t2);
+    } else if (document.getElementById("input_function_type").value === "bezier") {
+        var t1 = t / Math.PI + 0.5;
+        var t2 = t / Math.PI;
+        f1 = eval_bezier(p0, vec2.scale([], vec2.sub([], vec2.sub([], p1, vec2.scale([], p0, (1-t1)**2)), vec2.scale([], p2, t1**2)) , 1.0 / (2 * (1 - t1) * t1)), p2, t1);
+        f2 = eval_bezier(p1, vec2.scale([], vec2.sub([], vec2.sub([], p2, vec2.scale([], p1, (1-t2)**2)), vec2.scale([], p3, t2**2)) , 1.0 / (2 * (1 - t2) * t2)), p3, t2);
+    } else {
+        var t1 = t / Math.PI + 0.5;
+        var t2 = t / Math.PI;
+        f1 = eval_bezier(p0, vec2.scale([], vec2.sub([], vec2.sub([], p1, vec2.scale([], p0, (1-t1)**2)), vec2.scale([], p2, t1**2)) , 1.0 / (2 * (1 - t1) * t1)), p2, t1);
+        f2 = eval_bezier(p1, vec2.scale([], vec2.sub([], vec2.sub([], p2, vec2.scale([], p1, (1-t2)**2)), vec2.scale([], p3, t2**2)) , 1.0 / (2 * (1 - t2) * t2)), p3, t2);
     }
-    var t01 = (t1 - t) / (t1 - t0);
-    var t12 = (t2 - t) / (t2 - t1);
-    var t23 = (t3 - t) / (t3 - t2);
-    var t02 = (t2 - t) / (t2 - t0);
-    var t13 = (t3 - t) / (t3 - t1);
-    var a1 = vec2.scaleAndAdd_ip(vec2.scale([], p0, t01), p1, 1- t01)
-    var a2 = vec2.scaleAndAdd_ip(vec2.scale([], p1, t12), p2, 1- t12)
-    var a3 = vec2.scaleAndAdd_ip(vec2.scale([], p2, t23), p3, 1- t23)
-    var b1 = vec2.scaleAndAdd_ip(vec2.scale([], a1, t02), a2, 1- t02)
-    var b2 = vec2.scaleAndAdd_ip(vec2.scale([], a2, t13), a3, 1- t13)
-    return vec2.scaleAndAdd_ip(vec2.scale([], b1, t12), b2, 1- t12)
+    return vec2.scaleAndAdd_ip(vec2.scale([], f1, Math.cos(t) ** 2), f2, Math.sin(t) ** 2)
 }
 
 
@@ -54,45 +69,27 @@ function draw() {
     
     // draw line segments composing curve
     var numsteps = Number(document.getElementById("input_numsteps").value);
-    var t_value = [0.0]
-
-    if (document.getElementById("input_parameta_rule").value === "uniform") {
-        t_value = []
-        for (var i = 0; i < points.length; i++) {
-            t_value.push(i);
-        }
-
-    } else if (document.getElementById("input_parameta_rule").value === "chordal") {
-        t_value = [0.0]
-        for (var i = 1; i < points.length; i++) {
-            t_value.push(t_value[t_value.length - 1] + vec2.dist(points[i - 1], points[i]));
-        }
-    } else {
-        t_value = [0.0]
-        for (var i = 1; i < points.length; i++) {
-            t_value.push(t_value[t_value.length - 1] + Math.sqrt(vec2.dist(points[i - 1], points[i])));
-        }
-    }
-
-    
     legacygl.color(1, 0.6, 0.2);
     legacygl.begin(gl.LINE_STRIP);
-        for (var i = 1; i < points.length - 2; i++) {
-            for (var j = 0; j <= numsteps; j++) {
-                var t = t_value[i] + (t_value[i+1] - t_value[i]) * (j / numsteps)
-                legacygl.vertex2(eval_catmull_rom(points[i-1], points[i], points[i+1], points[i+2], t_value[i-1], t_value[i], t_value[i+1], t_value[i+2], t))
-            }
+    for (var i = 1; i < points.length - 2; i++) {
+        for (var j = 0; j <= numsteps; j++) {
+            var t = Math.PI * j / numsteps / 2;
+            legacygl.vertex2(eval_c2_interpolating_splines(points[i - 1], points[i], points[i+1], points[i+2], t))
         }
+    }
     legacygl.end();
-    
+
+    // draw sample points
     if (document.getElementById("input_show_samplepoints").checked) {
         legacygl.begin(gl.POINTS);
-            for (var i = 1; i < points.length - 2; i++) {
-                for (var j = 0; j <= numsteps; j++) {
-                    var t = t_value[i] + (t_value[i+1] - t_value[i]) * (j / numsteps)
-                    legacygl.vertex2(eval_catmull_rom(points[i-1], points[i], points[i+1], points[i+2], t_value[i-1], t_value[i], t_value[i+1], t_value[i+2], t))
-                }
+        for (var i = 1; i < points.length - 2; i++) {
+            for (var j = 0; j <= numsteps; j++) {
+                var t = Math.PI * j / numsteps / 2;
+                legacygl.vertex2(eval_c2_interpolating_splines(points[i - 1], points[i], points[i+1], points[i+2], t))
+                // var p1 = points[0], p2 = points[1], p3 = points[2],t2 = t / Math.PI;
+                // legacygl.vertex2(eval_bezier(p1, vec2.scale([], vec2.sub([], vec2.sub([], p2, vec2.scale([], p1, (1-t2)**2)), vec2.scale([], p3, t2**2)) , 1.0 / (2 * (1 - t2) * t2)), p3, t2));
             }
+        }
         legacygl.end();
     }
     
@@ -235,16 +232,12 @@ function add_point() {
       <td colspan="2"><input type="checkbox" id="input_show_samplepoints" onchange="draw();" checked></td>
     </tr>
     <tr>
-        <td>Add point</td>
-        <td colspan="2"><button id="input_add_points" onclick="add_point();">add points</button></td>
-    </tr>
-    <tr>
-        <td>Select Param split</td>
+        <td>補間関数</td>
         <td>
-        <select name="example" id="input_parameta_rule" onchange="draw()">
-            <option value="uniform" selected>Uniform</option>
-            <option value="chordal">Chordal</option>
-            <option value="centripetal">Centripetal</option>
+        <select name="example" id="input_function_type" onchange="draw()">
+            <option value="bezier" selected>bezier</option>
+            <option value="circular">circular</option>
+            <option value="elliptical">Elliptical</option>
         </select>
         </td>
     </tr>
